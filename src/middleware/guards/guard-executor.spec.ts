@@ -254,11 +254,11 @@ describe('GuardExecutor', () => {
       await executor.executeGuards(context);
 
       expect(receivedContext).not.toBeNull();
-      
+
       // Valid indices
       expect(receivedContext!.getArgByIndex(0)).toBe(client);
       expect(receivedContext!.getArgByIndex(1)).toBe(data);
-      
+
       // Out-of-bounds indices should return undefined
       expect(receivedContext!.getArgByIndex(2)).toBeUndefined();
       expect(receivedContext!.getArgByIndex(-1)).toBeUndefined();

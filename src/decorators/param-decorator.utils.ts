@@ -4,7 +4,7 @@ import 'reflect-metadata';
 /**
  * Re-export NestJS's ROUTE_ARGS_METADATA as PARAM_ARGS_METADATA for consistency
  * with our internal naming conventions.
- * 
+ *
  * @internal
  */
 export const PARAM_ARGS_METADATA = ROUTE_ARGS_METADATA;

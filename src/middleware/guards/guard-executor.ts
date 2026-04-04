@@ -8,6 +8,7 @@ import { WsContext } from '../ws-context';
  * Execution context for WebSocket guards
  * Extends the base WsContext with guard-specific functionality
  */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface WsExecutionContext extends WsContext {}
 
 /**
@@ -79,11 +80,19 @@ export class GuardExecutor {
 
   /**
    * Instantiates a guard using the DI container
+   * Falls back to direct instantiation if DI resolution fails
    * @param guardType - The guard type
    * @returns Guard instance
    */
   private instantiateGuard(guardType: Type<CanActivate>): CanActivate {
-    return this.moduleRef.get(guardType);
+    try {
+      return this.moduleRef.get(guardType);
+    } catch {
+      this.logger.warn(
+        `Failed to resolve guard ${guardType.name} from DI container, falling back to direct instantiation`
+      );
+      return new guardType();
+    }
   }
 
   /**

@@ -42,11 +42,7 @@ export function UsePipes(
     if (typeof descriptorOrIndex === 'number') {
       // Parameter decorator
       const existingPipes: Map<number, Type<PipeTransform>[]> =
-        Reflect.getMetadata(
-          `${PIPES_METADATA}:params`,
-          metadataTarget,
-          propertyKey!
-        ) || new Map();
+        Reflect.getMetadata(`${PIPES_METADATA}:params`, metadataTarget, propertyKey!) || new Map();
 
       const paramPipes = existingPipes.get(descriptorOrIndex) || [];
       paramPipes.push(...pipeTypes);
@@ -62,7 +58,7 @@ export function UsePipes(
       // Method decorator - merge with existing pipes
       const existingPipes: Type<PipeTransform>[] =
         Reflect.getMetadata(PIPES_METADATA, metadataTarget, propertyKey) || [];
-      
+
       Reflect.defineMetadata(
         PIPES_METADATA,
         [...existingPipes, ...pipeTypes],
@@ -71,8 +67,11 @@ export function UsePipes(
       );
       return descriptorOrIndex;
     } else {
-      // Class decorator
-      Reflect.defineMetadata(PIPES_METADATA, pipeTypes, target);
+      // Class decorator - merge with existing pipes
+      const existingPipes: Type<PipeTransform>[] =
+        Reflect.getMetadata(PIPES_METADATA, target) || [];
+
+      Reflect.defineMetadata(PIPES_METADATA, [...existingPipes, ...pipeTypes], target);
     }
   };
 

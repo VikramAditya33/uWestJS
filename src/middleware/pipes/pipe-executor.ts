@@ -132,6 +132,9 @@ export class PipeExecutor {
     const allPipes = [...classPipes, ...methodPipes];
     const result: ParamWithPipes[] = [];
 
+    // Build a Map for O(1) parameter metadata lookup
+    const paramMetaMap = new Map(paramMetadata.map((p) => [p.index, p]));
+
     // Build a combined map of all parameter indices that need pipe processing
     const paramIndices = new Set<number>([
       ...paramMetadata.map((p) => p.index),
@@ -139,7 +142,7 @@ export class PipeExecutor {
     ]);
 
     paramIndices.forEach((index) => {
-      const paramMeta = paramMetadata.find((p) => p.index === index);
+      const paramMeta = paramMetaMap.get(index);
       const paramSpecificPipes = paramPipes.get(index) || [];
       const combinedPipes = [...allPipes, ...paramSpecificPipes];
 
@@ -158,11 +161,19 @@ export class PipeExecutor {
 
   /**
    * Instantiates a pipe using the DI container
+   * Falls back to direct instantiation if DI resolution fails
    * @param pipeType - The pipe type
    * @returns Pipe instance
    */
   private instantiatePipe(pipeType: Type<PipeTransform>): PipeTransform {
-    return this.moduleRef.get(pipeType);
+    try {
+      return this.moduleRef.get(pipeType);
+    } catch {
+      this.logger.warn(
+        `Failed to resolve pipe ${pipeType.name} from DI container, falling back to direct instantiation`
+      );
+      return new pipeType();
+    }
   }
 
   /**

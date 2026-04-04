@@ -29,7 +29,7 @@ export function UseGuards(...guards: Type<CanActivate>[]): ClassDecorator & Meth
       const metadataTarget = typeof target === 'function' ? target : (target as object).constructor;
       const existingGuards: Type<CanActivate>[] =
         Reflect.getMetadata(GUARDS_METADATA, metadataTarget, propertyKey) || [];
-      
+
       Reflect.defineMetadata(
         GUARDS_METADATA,
         [...existingGuards, ...guards],
@@ -38,8 +38,11 @@ export function UseGuards(...guards: Type<CanActivate>[]): ClassDecorator & Meth
       );
       return descriptor;
     } else {
-      // Class decorator
-      Reflect.defineMetadata(GUARDS_METADATA, guards, target);
+      // Class decorator - merge with existing guards
+      const existingGuards: Type<CanActivate>[] =
+        Reflect.getMetadata(GUARDS_METADATA, target) || [];
+
+      Reflect.defineMetadata(GUARDS_METADATA, [...existingGuards, ...guards], target);
       return;
     }
   };

@@ -9,6 +9,7 @@ import { WsContext } from '../ws-context';
  * WebSocket arguments host for exception filters
  * Extends the base WsContext with filter-specific functionality
  */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface WsArgumentsHost extends WsContext {}
 
 /**
@@ -28,6 +29,16 @@ export class ExceptionFilterExecutor {
 
   /**
    * Catches and handles exceptions using filters
+   *
+   * Note: Exception filters in WebSocket context are executed for side effects
+   * (logging, metrics, etc.) but cannot modify the response. All registered
+   * filters are executed in order (method filters before class filters), and
+   * the final response is always the serialized exception.
+   *
+   * This differs from HTTP exception filters which can send custom responses
+   * directly. In WebSocket, the response must be serialized and returned to
+   * the caller for transmission.
+   *
    * @param exception - The exception that was thrown
    * @param host - The arguments host
    * @returns The error response to send to the client
@@ -38,7 +49,8 @@ export class ExceptionFilterExecutor {
     if (filters.length > 0) {
       this.logger.debug(`Executing ${filters.length} exception filter(s) for ${host.methodName}`);
 
-      // Execute all filters (they all get a chance to handle the exception)
+      // Execute all filters for side effects (logging, metrics, etc.)
+      // Filters cannot modify the response in WebSocket context
       for (const filterType of filters) {
         const filter = this.instantiateFilter(filterType);
 
@@ -77,11 +89,19 @@ export class ExceptionFilterExecutor {
 
   /**
    * Instantiates an exception filter using the DI container
+   * Falls back to direct instantiation if DI resolution fails
    * @param filterType - The filter type
    * @returns Filter instance
    */
   private instantiateFilter(filterType: Type<ExceptionFilter>): ExceptionFilter {
-    return this.moduleRef.get(filterType);
+    try {
+      return this.moduleRef.get(filterType);
+    } catch {
+      this.logger.warn(
+        `Failed to resolve filter ${filterType.name} from DI container, falling back to direct instantiation`
+      );
+      return new filterType();
+    }
   }
 
   /**
@@ -91,7 +111,7 @@ export class ExceptionFilterExecutor {
    */
   private createArgumentsHost(host: WsArgumentsHost): ArgumentsHost {
     const args = [host.client, host.data];
-    
+
     return {
       getArgs: <T extends unknown[] = unknown[]>() => args as T,
       getArgByIndex: <T = unknown>(index: number): T => args[index] as T,
@@ -123,7 +143,7 @@ export class ExceptionFilterExecutor {
 
     // For generic errors, log details server-side but return generic message to client
     this.logger.error(`Unhandled exception: ${exception.message}`, exception.stack);
-    
+
     return {
       error: 'Internal server error',
       message: 'An unexpected error occurred',

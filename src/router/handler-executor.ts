@@ -31,8 +31,33 @@ export interface ExecutionResult {
 }
 
 /**
+ * Options for configuring HandlerExecutor
+ */
+export interface HandlerExecutorOptions {
+  /**
+   * Module reference for DI support in guards, pipes, and filters
+   */
+  moduleRef?: ModuleRef;
+
+  /**
+   * Custom guard executor (primarily for testing)
+   */
+  guardExecutor?: GuardExecutor;
+
+  /**
+   * Custom pipe executor (primarily for testing)
+   */
+  pipeExecutor?: PipeExecutor;
+
+  /**
+   * Custom exception filter executor (primarily for testing)
+   */
+  filterExecutor?: ExceptionFilterExecutor;
+}
+
+/**
  * Executes message handlers with proper parameter injection
- * 
+ *
  * Supports dependency injection for guards, pipes, and filters when a ModuleRef is provided.
  * Without a ModuleRef, guards/pipes/filters are instantiated directly and cannot have
  * constructor dependencies.
@@ -45,20 +70,13 @@ export class HandlerExecutor {
 
   /**
    * Creates a handler executor
-   * @param moduleRef - Optional module reference for DI support in guards, pipes, and filters
-   * @param guardExecutor - Optional guard executor for testing (defaults to new instance)
-   * @param pipeExecutor - Optional pipe executor for testing (defaults to new instance)
-   * @param filterExecutor - Optional filter executor for testing (defaults to new instance)
+   * @param options - Configuration options
    */
-  constructor(
-    moduleRef?: ModuleRef,
-    guardExecutor?: GuardExecutor,
-    pipeExecutor?: PipeExecutor,
-    filterExecutor?: ExceptionFilterExecutor
-  ) {
-    this.guardExecutor = guardExecutor || new GuardExecutor(moduleRef);
-    this.pipeExecutor = pipeExecutor || new PipeExecutor(moduleRef);
-    this.filterExecutor = filterExecutor || new ExceptionFilterExecutor(moduleRef);
+  constructor(options: HandlerExecutorOptions = {}) {
+    const { moduleRef, guardExecutor, pipeExecutor, filterExecutor } = options;
+    this.guardExecutor = guardExecutor ?? new GuardExecutor(moduleRef);
+    this.pipeExecutor = pipeExecutor ?? new PipeExecutor(moduleRef);
+    this.filterExecutor = filterExecutor ?? new ExceptionFilterExecutor(moduleRef);
   }
 
   /**

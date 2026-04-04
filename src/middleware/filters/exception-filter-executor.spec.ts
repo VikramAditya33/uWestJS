@@ -164,7 +164,7 @@ describe('ExceptionFilterExecutor', () => {
       await executor.catch(new Error('Test'), host);
 
       expect(receivedHost).not.toBeNull();
-      
+
       // getArgs should return array with 2 elements
       const args = receivedHost!.getArgs();
       expect(args).toHaveLength(2);
@@ -174,7 +174,7 @@ describe('ExceptionFilterExecutor', () => {
       // getArgByIndex should return correct values
       expect(receivedHost!.getArgByIndex(0)).toBe(client);
       expect(receivedHost!.getArgByIndex(1)).toBe(data);
-      
+
       // Out-of-range indices should return undefined
       expect(receivedHost!.getArgByIndex(2)).toBeUndefined();
       expect(receivedHost!.getArgByIndex(-1)).toBeUndefined();

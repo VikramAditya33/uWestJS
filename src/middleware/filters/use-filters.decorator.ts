@@ -29,7 +29,7 @@ export function UseFilters(...filters: Type<ExceptionFilter>[]): ClassDecorator 
       const metadataTarget = typeof target === 'function' ? target : (target as object).constructor;
       const existingFilters: Type<ExceptionFilter>[] =
         Reflect.getMetadata(EXCEPTION_FILTERS_METADATA, metadataTarget, propertyKey) || [];
-      
+
       Reflect.defineMetadata(
         EXCEPTION_FILTERS_METADATA,
         [...existingFilters, ...filters],
@@ -38,8 +38,11 @@ export function UseFilters(...filters: Type<ExceptionFilter>[]): ClassDecorator 
       );
       return descriptor;
     } else {
-      // Class decorator
-      Reflect.defineMetadata(EXCEPTION_FILTERS_METADATA, filters, target);
+      // Class decorator - merge with existing filters
+      const existingFilters: Type<ExceptionFilter>[] =
+        Reflect.getMetadata(EXCEPTION_FILTERS_METADATA, target) || [];
+
+      Reflect.defineMetadata(EXCEPTION_FILTERS_METADATA, [...existingFilters, ...filters], target);
       return;
     }
   };

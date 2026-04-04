@@ -13,6 +13,7 @@ import { MessageRouter } from '../router/message-router';
 import { HandlerExecutor } from '../router/handler-executor';
 import { RoomManager } from '../rooms';
 import { UwsSocketImpl } from '../socket/uws-socket';
+import { LifecycleHooksManager } from './lifecycle-hooks';
 
 /**
  * Extended WebSocket with client data
@@ -67,6 +68,7 @@ export class UwsAdapter implements WebSocketAdapter {
   private readonly messageRouter = new MessageRouter();
   private readonly handlerExecutor: HandlerExecutor;
   private readonly roomManager = new RoomManager();
+  private readonly lifecycleHooksManager = new LifecycleHooksManager();
   private gatewayInstance?: object;
 
   constructor(_appInstance: unknown, options?: UwsAdapterOptions) {
@@ -82,7 +84,7 @@ export class UwsAdapter implements WebSocketAdapter {
     };
 
     // Initialize handler executor with optional ModuleRef for DI support
-    this.handlerExecutor = new HandlerExecutor(options?.moduleRef);
+    this.handlerExecutor = new HandlerExecutor({ moduleRef: options?.moduleRef });
 
     this.logger.log('UwsAdapter initialized');
   }
@@ -135,6 +137,11 @@ export class UwsAdapter implements WebSocketAdapter {
           this.logger.debug(`Client connected: ${id} (Total: ${this.clients.size})`);
 
           try {
+            // Call lifecycle hook
+            if (this.gatewayInstance) {
+              this.lifecycleHooksManager.callConnectionHook(this.gatewayInstance, extWs);
+            }
+
             if (this.wsHandler) {
               this.wsHandler.handleConnection(extWs);
             }
@@ -182,6 +189,11 @@ export class UwsAdapter implements WebSocketAdapter {
           }
 
           try {
+            // Call lifecycle hook
+            if (this.gatewayInstance) {
+              this.lifecycleHooksManager.callDisconnectHook(this.gatewayInstance, extWs);
+            }
+
             if (this.wsHandler) {
               this.wsHandler.handleDisconnect(extWs);
             }
@@ -247,6 +259,9 @@ export class UwsAdapter implements WebSocketAdapter {
     this.logger.log(
       `Registered ${handlers.length} message handlers from gateway: ${handlers.map((h) => h.message).join(', ')}`
     );
+
+    // Call afterInit lifecycle hook
+    this.lifecycleHooksManager.callInitHook(gateway, this.app);
   }
 
   /**

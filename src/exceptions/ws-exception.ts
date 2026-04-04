@@ -39,7 +39,7 @@ export class WsException extends Error {
   private static safeStringify(obj: object): string {
     try {
       return JSON.stringify(obj);
-    } catch (error) {
+    } catch {
       // Handle circular references or other serialization errors
       return '[Unserializable object]';
     }

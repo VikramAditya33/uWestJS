@@ -44,38 +44,23 @@ async function executeHandler(
   const gateway = new gatewayClass();
 
   // Apply parameter decorator metadata (check for duplicates)
-  const existingParams =
-    Reflect.getMetadata(PARAM_ARGS_METADATA, gatewayClass.prototype.constructor, methodName) || [];
-  
+  const existingParams = Reflect.getMetadata(PARAM_ARGS_METADATA, gatewayClass, methodName) || [];
+
   const alreadyExists = existingParams.some(
     (p: { index: number; type: ParamType }) => p.index === 0 && p.type === ParamType.MESSAGE_BODY
   );
-  
+
   if (!alreadyExists) {
     const newParams = [...existingParams, { index: 0, type: ParamType.MESSAGE_BODY }];
-    Reflect.defineMetadata(
-      PARAM_ARGS_METADATA,
-      newParams,
-      gatewayClass.prototype.constructor,
-      methodName
-    );
+    Reflect.defineMetadata(PARAM_ARGS_METADATA, newParams, gatewayClass, methodName);
   }
 
   // Apply parameter pipes
   if (paramPipes.length > 0) {
     const existingPipes: Map<number, Type<PipeTransform>[]> =
-      Reflect.getMetadata(
-        `${PIPES_METADATA}:params`,
-        gatewayClass.prototype.constructor,
-        methodName
-      ) || new Map();
+      Reflect.getMetadata(`${PIPES_METADATA}:params`, gatewayClass, methodName) || new Map();
     existingPipes.set(0, paramPipes);
-    Reflect.defineMetadata(
-      `${PIPES_METADATA}:params`,
-      existingPipes,
-      gatewayClass.prototype.constructor,
-      methodName
-    );
+    Reflect.defineMetadata(`${PIPES_METADATA}:params`, existingPipes, gatewayClass, methodName);
   }
 
   // Apply class-level pipes

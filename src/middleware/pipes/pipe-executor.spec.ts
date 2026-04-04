@@ -41,9 +41,8 @@ function applyPipeToParam(
 class UpperCasePipe implements PipeTransform {
   transform(value: string): string {
     return typeof value === 'string' ? value.toUpperCase() : value;
-   }
   }
-
+}
 
 class TrimPipe implements PipeTransform {
   transform(value: string): string {
