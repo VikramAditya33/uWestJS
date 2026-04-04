@@ -2,6 +2,7 @@
 src/
 *.spec.ts
 *.test.ts
+**/__mocks__/
 
 # Config files
 tsconfig.json

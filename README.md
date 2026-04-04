@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="uWestJS.png" alt="uWestJS Logo" width="200"/>
+  <img src="uWestJS.png" alt="uWestJS Logo" width="400"/>
 </p>
 
 # uWestJS
@@ -197,11 +197,6 @@ cors: { origin: '*' }
 
 // Allow multiple origins
 cors: {
-  origin: 'https://example.com',
-}
-
-// Allow multiple origins
-cors: {
   origin: ['https://example.com', 'https://app.example.com'],
 }
 
@@ -244,15 +239,19 @@ export class WsAuthGuard implements CanActivate {
   
   canActivate(context: any): boolean {
     try {
-      const token = context.args[1]?.token;
+      const data = context.switchToWs().getData();
+      const token = data?.token;
       if (!token) return false;
       
-      this.jwtService.verify(token);
+      const payload = this.jwtService.verify(token);
+      const client = context.switchToWs().getClient();
+      client.data = { user: payload, authenticated: true };
       return true;
     } catch {
       return false;
     }
   }
+}
 }
 ```
 
