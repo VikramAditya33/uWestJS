@@ -861,9 +861,6 @@ cors: { origin: 'https://example.com' }
 cors: { origin: '*' }
 
 // Allow multiple origins
-cors: { origin: 'https://example.com' }
-
-// Allow multiple origins
 cors: { origin: ['https://example.com', 'https://app.example.com'] }
 
 // Dynamic validation (recommended for flexible security)
@@ -1385,9 +1382,6 @@ export class NotificationGateway {
     @MessageBody() topics: string[],
     @ConnectedSocket() client: UwsSocket,
   ) {
-    // Store client reference for later use
-    this.clients.set(client.id, client);
-    
     // Subscribe to multiple notification topics
     topics.forEach(topic => {
       client.join(`notifications:${topic}`);
@@ -1395,61 +1389,112 @@ export class NotificationGateway {
     
     return { event: 'subscribed', topics };
   }
+}
+```
+
+**Broadcasting from Services:** To send notifications from a service (outside of message handlers), store a reference to any connected socket:
+
+```typescript
+@WebSocketGateway()
+export class NotificationGateway implements OnGatewayInit {
+  private adapter: UwsAdapter;
   
-  // Called from a service to send notifications
-  sendNotification(topic: string, notification: any) {
-    const roomName = `notifications:${topic}`;
-    
-    // Get any client to use its broadcast capability
-    const anyClient = this.clients.values().next().value;
-    if (anyClient) {
-      anyClient.broadcast.to(roomName).emit('notification', {
-        topic,
-        ...notification,
-      });
-    }
+  afterInit(server: UwsAdapter) {
+    this.adapter = server;
   }
   
-  // Clean up on disconnect
-  handleDisconnect(client: UwsSocket) {
-    this.clients.delete(client.id);
+  @SubscribeMessage('subscribe-notifications')
+  handleSubscribe(
+    @MessageBody() topics: string[],
+    @ConnectedSocket() client: UwsSocket,
+  ) {
+    topics.forEach(topic => {
+      client.join(`notifications:${topic}`);
+    });
+    return { event: 'subscribed', topics };
   }
 }
 ```
 
-**Alternative Pattern:** If you need to broadcast without a client reference, inject the adapter:
+**Broadcasting from Services:** The adapter doesn't expose a direct room broadcast API. The recommended approach is to emit from within a message handler where you have access to a client socket, or store client references in your gateway:
 
 ```typescript
+// Define a notification interface for type safety
+interface Notification {
+  message: string;
+  timestamp?: number;
+  priority?: 'low' | 'medium' | 'high';
+  data?: Record<string, unknown>;
+}
+
 @WebSocketGateway()
-export class NotificationGateway {
-  constructor(
-    @Inject('WS_ADAPTER') private adapter: UwsAdapter
-  ) {}
+export class NotificationGateway implements OnGatewayInit {
+  private adapter: UwsAdapter;
+  private subscribedClients = new Map<string, Set<string>>(); // topic -> Set<clientId>
   
-  sendNotification(topic: string, notification: any) {
-    // Direct adapter access for broadcasting
-    this.adapter.broadcast.to(`notifications:${topic}`).emit('notification', {
-      topic,
-      ...notification,
+  afterInit(server: UwsAdapter) {
+    this.adapter = server;
+  }
+  
+  @SubscribeMessage('subscribe-notifications')
+  handleSubscribe(
+    @MessageBody() topics: string[],
+    @ConnectedSocket() client: UwsSocket,
+  ) {
+    topics.forEach(topic => {
+      client.join(`notifications:${topic}`);
+      
+      // Track subscriptions for service-initiated broadcasts
+      if (!this.subscribedClients.has(topic)) {
+        this.subscribedClients.set(topic, new Set());
+      }
+      this.subscribedClients.get(topic)!.add(client.id);
+    });
+    return { event: 'subscribed', topics };
+  }
+  
+  @SubscribeMessage('unsubscribe-notifications')
+  handleUnsubscribe(
+    @MessageBody() topics: string[],
+    @ConnectedSocket() client: UwsSocket,
+  ) {
+    topics.forEach(topic => {
+      client.leave(`notifications:${topic}`);
+      this.subscribedClients.get(topic)?.delete(client.id);
+    });
+    return { event: 'unsubscribed', topics };
+  }
+  
+  // Called from a service to send notifications with type safety
+  sendNotification(topic: string, notification: Notification) {
+    const subscribers = this.subscribedClients.get(topic);
+    if (!subscribers || subscribers.size === 0) return;
+    
+    // Emit to each subscribed client
+    subscribers.forEach(clientId => {
+      const socket = this.adapter.getSocket(clientId);
+      if (socket) {
+        try {
+          socket.emit('notification', { topic, ...notification });
+        } catch {
+          // Socket disconnected, remove from subscribers
+          subscribers.delete(clientId);
+        }
+      } else {
+        // Socket no longer exists, remove from subscribers
+        subscribers.delete(clientId);
+      }
+    });
+  }
+  
+  // Clean up on disconnect
+  handleDisconnect(client: UwsSocket) {
+    // Remove client from all topic subscriptions
+    this.subscribedClients.forEach((subscribers) => {
+      subscribers.delete(client.id);
     });
   }
 }
-
-// In your module, provide the adapter:
-@Module({
-  providers: [
-    NotificationGateway,
-    {
-      provide: 'WS_ADAPTER',
-      useFactory: () => {
-        // Return your adapter instance
-        // You'll need to store it during app initialization
-        return globalAdapterInstance;
-      },
-    },
-  ],
-})
-export class AppModule {}
 ```
 
 ### Room Naming Conventions

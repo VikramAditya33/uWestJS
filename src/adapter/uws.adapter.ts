@@ -107,6 +107,7 @@ export class UwsAdapter implements WebSocketAdapter {
   private readonly roomManager = new RoomManager();
   private readonly lifecycleHooksManager = new LifecycleHooksManager();
   private readonly gateways = new Map<string, object>(); // Support multiple gateways
+  private gatewaySet = new WeakSet<object>(); // Track registered instances
   private bindMessageHandlersCalled = false;
 
   constructor(appInstance: unknown, options?: UwsAdapterOptions) {
@@ -175,7 +176,13 @@ export class UwsAdapter implements WebSocketAdapter {
           try {
             // Call lifecycle hooks for all registered gateways
             this.gateways.forEach((gateway) => {
-              this.lifecycleHooksManager.callConnectionHook(gateway, extWs);
+              try {
+                this.lifecycleHooksManager.callConnectionHook(gateway, extWs);
+              } catch (error) {
+                this.logger.error(
+                  `Connection hook error for ${gateway.constructor?.name}: ${this.formatError(error)}`
+                );
+              }
             });
 
             if (this.wsHandler) {
@@ -226,7 +233,13 @@ export class UwsAdapter implements WebSocketAdapter {
           try {
             // Call lifecycle hooks for all registered gateways
             this.gateways.forEach((gateway) => {
-              this.lifecycleHooksManager.callDisconnectHook(gateway, extWs);
+              try {
+                this.lifecycleHooksManager.callDisconnectHook(gateway, extWs);
+              } catch (error) {
+                this.logger.error(
+                  `Disconnect hook error for ${gateway.constructor?.name}: ${this.formatError(error)}`
+                );
+              }
             });
 
             if (this.wsHandler) {
@@ -263,6 +276,26 @@ export class UwsAdapter implements WebSocketAdapter {
    * Manually register a gateway for message handling
    * Supports multiple gateways - each gateway's handlers are registered independently
    * Call this after app.useWebSocketAdapter() but before app.listen()
+   *
+   * IMPORTANT: Duplicate Event Handlers
+   * If multiple gateways register handlers for the same event, the LAST registered
+   * handler will be invoked (last-match-wins semantics). Subsequent registrations for
+   * the same event will overwrite previous handlers with a warning.
+   *
+   * Example:
+   * ```typescript
+   * // Gateway1 has @SubscribeMessage('message')
+   * adapter.registerGateway(gateway1); // This handler is registered first
+   *
+   * // Gateway2 also has @SubscribeMessage('message')
+   * adapter.registerGateway(gateway2); // This will overwrite gateway1's handler with a warning
+   * // Now gateway2's handler will be used for 'message' events
+   * ```
+   *
+   * To avoid conflicts, ensure each gateway uses unique event names or use namespacing:
+   * - Gateway1: @SubscribeMessage('chat:message')
+   * - Gateway2: @SubscribeMessage('game:message')
+   *
    * @param gateway - The gateway instance to register
    */
   registerGateway(gateway: object): void {
@@ -274,8 +307,8 @@ export class UwsAdapter implements WebSocketAdapter {
     const gatewayName = gateway.constructor?.name || 'Unknown';
     this.logger.log(`Registering gateway: ${gatewayName}`);
 
-    // Check if gateway is already registered
-    if (this.gateways.has(gatewayName)) {
+    // Check if gateway instance is already registered
+    if (this.gatewaySet.has(gateway)) {
       this.logger.warn(
         `Gateway ${gatewayName} is already registered. Skipping duplicate registration.`
       );
@@ -284,6 +317,7 @@ export class UwsAdapter implements WebSocketAdapter {
 
     // Store gateway instance
     this.gateways.set(gatewayName, gateway);
+    this.gatewaySet.add(gateway);
 
     // Scan gateway for @SubscribeMessage decorators
     const handlers = this.metadataScanner.scanForMessageHandlers(gateway);
@@ -293,11 +327,29 @@ export class UwsAdapter implements WebSocketAdapter {
       return;
     }
 
+    // Check for duplicate handlers across gateways before registering
+    const duplicates: string[] = [];
+    for (const handler of handlers) {
+      const key =
+        typeof handler.message === 'string' ? handler.message : JSON.stringify(handler.message);
+
+      if (this.messageRouter.hasHandler(handler.message)) {
+        duplicates.push(key);
+      }
+    }
+
+    if (duplicates.length > 0) {
+      this.logger.warn(
+        `Gateway ${gatewayName} has ${duplicates.length} handler(s) that will overwrite existing handlers: ${duplicates.join(', ')}. ` +
+          `Consider using unique event names or namespacing (e.g., 'gateway:event') to avoid conflicts.`
+      );
+    }
+
     // Register handlers with the message router
     this.messageRouter.registerHandlers(handlers);
 
     this.logger.log(
-      `Registered ${handlers.length} message handlers from ${gatewayName}: ${handlers.map((h) => h.message).join(', ')}`
+      `Registered ${handlers.length} message handlers from ${gatewayName}: ${handlers.map((h) => (typeof h.message === 'string' ? h.message : JSON.stringify(h.message))).join(', ')}`
     );
 
     // Call afterInit lifecycle hook
@@ -368,6 +420,8 @@ export class UwsAdapter implements WebSocketAdapter {
     this.clients.clear();
     this.sockets.clear();
     this.roomManager.clear();
+    this.gateways.clear();
+    this.gatewaySet = new WeakSet<object>(); // Reset gateway tracking for re-registration
     this.logger.log('All client connections closed');
   }
 
