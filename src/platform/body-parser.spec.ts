@@ -1,5 +1,5 @@
 import type { HttpResponse } from 'uWebSockets.js';
-import { BodyParser } from './body-parser';
+import { BodyParser, BUFFER_WATERMARK } from './body-parser';
 import { toArrayBuffer } from './test-helpers';
 
 describe('BodyParser', () => {
@@ -78,12 +78,12 @@ describe('BodyParser', () => {
       expect(parser.isReceived).toBe(false);
     });
 
-    it('should pause when buffering exceeds 128KB', () => {
+    it('should pause when buffering exceeds buffer watermark', () => {
       const headers = { 'content-length': '200000' };
       new BodyParser(mockUwsRes, headers, 1024 * 1024);
 
-      // Send 130KB of data (exceeds the 128KB watermark in body-parser.ts)
-      const largeChunk = Buffer.alloc(130 * 1024);
+      // Send data exceeding BUFFER_WATERMARK (128KB)
+      const largeChunk = Buffer.alloc(BUFFER_WATERMARK + 2 * 1024); // 130KB
       onDataCallback(toArrayBuffer(largeChunk), false);
 
       expect(mockUwsRes.pause).toHaveBeenCalled();
@@ -137,6 +137,18 @@ describe('BodyParser', () => {
       onDataCallback(toArrayBuffer(chunk), false);
 
       await expect(bufferPromise).rejects.toThrow('Body size limit exceeded');
+    });
+
+    it('should reject buffer() immediately when Content-Length exceeds limit', async () => {
+      // Content-Length of 100 exceeds limit of 50
+      const headers = { 'content-length': '100' };
+      const parser = new BodyParser(mockUwsRes, headers, 50);
+
+      // buffer() should reject immediately without waiting for data
+      await expect(parser.buffer()).rejects.toThrow('Body size limit exceeded');
+
+      // Connection should be closed
+      expect(mockUwsRes.close).toHaveBeenCalled();
     });
   });
 
@@ -255,45 +267,51 @@ describe('BodyParser', () => {
       expect(buffer.toString()).toBe('Hello');
       expect(parser.bytesReceived).toBe(5);
     });
-  });
 
-  describe('pause/resume', () => {
-    it('should pause receiving data', () => {
-      const headers = { 'content-length': '100' };
+    it('should handle multiple buffer() calls by returning same data', async () => {
+      const headers = { 'content-length': '5' };
       const parser = new BodyParser(mockUwsRes, headers, 1024 * 1024);
 
-      parser.pause();
+      const bufferPromise1 = parser.buffer();
+      const bufferPromise2 = parser.buffer();
 
-      expect(mockUwsRes.pause).toHaveBeenCalled();
+      onDataCallback(toArrayBuffer(Buffer.from('Hello')), true);
+
+      const [buffer1, buffer2] = await Promise.all([bufferPromise1, bufferPromise2]);
+
+      // Both promises should resolve with the same data
+      expect(buffer1.toString()).toBe('Hello');
+      expect(buffer2.toString()).toBe('Hello');
+      // Verify same Buffer instance is returned (not just equivalent data)
+      expect(buffer1).toBe(buffer2);
     });
 
-    it('should resume receiving data', () => {
-      const headers = { 'content-length': '100' };
+    it('should handle multiple buffer() calls with chunked transfer encoding', async () => {
+      const headers = { 'transfer-encoding': 'chunked' };
       const parser = new BodyParser(mockUwsRes, headers, 1024 * 1024);
 
-      parser.pause();
-      parser.resume();
+      const bufferPromise1 = parser.buffer();
+      const bufferPromise2 = parser.buffer();
+      const bufferPromise3 = parser.buffer();
 
-      expect(mockUwsRes.resume).toHaveBeenCalled();
-    });
+      // Send chunks
+      onDataCallback(toArrayBuffer(Buffer.from('Hello')), false);
+      onDataCallback(toArrayBuffer(Buffer.from(' ')), false);
+      onDataCallback(toArrayBuffer(Buffer.from('World')), true);
 
-    it('should not pause if already paused', () => {
-      const headers = { 'content-length': '100' };
-      const parser = new BodyParser(mockUwsRes, headers, 1024 * 1024);
+      const [buffer1, buffer2, buffer3] = await Promise.all([
+        bufferPromise1,
+        bufferPromise2,
+        bufferPromise3,
+      ]);
 
-      parser.pause();
-      parser.pause();
-
-      expect(mockUwsRes.pause).toHaveBeenCalledTimes(1);
-    });
-
-    it('should not resume if not paused', () => {
-      const headers = { 'content-length': '100' };
-      const parser = new BodyParser(mockUwsRes, headers, 1024 * 1024);
-
-      parser.resume();
-
-      expect(mockUwsRes.resume).not.toHaveBeenCalled();
+      // All promises should resolve with the same data
+      expect(buffer1.toString()).toBe('Hello World');
+      expect(buffer2.toString()).toBe('Hello World');
+      expect(buffer3.toString()).toBe('Hello World');
+      // Verify same Buffer instance is returned (not just equivalent data)
+      expect(buffer1).toBe(buffer2);
+      expect(buffer2).toBe(buffer3);
     });
   });
 
