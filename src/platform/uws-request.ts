@@ -1,5 +1,7 @@
 import type { HttpRequest, HttpResponse } from 'uWebSockets.js';
 import { BodyParser } from './body-parser';
+import * as cookie from 'cookie';
+import * as signature from 'cookie-signature';
 
 /**
  * Headers that should NOT be duplicated per HTTP spec
@@ -56,6 +58,10 @@ export class UwsRequest {
   private cachedHeaders?: Record<string, string | string[]>;
   private cachedQueryParams?: Record<string, string | string[]>;
   private cachedParams?: Record<string, string>;
+  private cachedCookies?: Record<string, string>;
+
+  // Cookie secret for Express-compatible signedCookies property
+  private cookieSecret?: string;
 
   // Reference to response (for body parsing later)
   private readonly uwsRes: HttpResponse;
@@ -176,6 +182,125 @@ export class UwsRequest {
    */
   get params(): Record<string, string> {
     return this.cachedParams || {};
+  }
+
+  /**
+   * Get parsed cookies (lazy evaluation)
+   *
+   * Parses the Cookie header and returns an object of cookie name-value pairs.
+   * Cookies are parsed on first access and cached for performance.
+   *
+   * @returns Object containing cookie name-value pairs
+   *
+   * @example
+   * ```typescript
+   * // Cookie header: "session=abc123; user=vikram"
+   * const cookies = req.cookies;
+   * console.log(cookies.session); // "abc123"
+   * console.log(cookies.user); // "vikram"
+   * ```
+   */
+  get cookies(): Record<string, string> {
+    if (this.cachedCookies) {
+      return this.cachedCookies;
+    }
+
+    const cookieHeader = this.headers['cookie'];
+    if (!cookieHeader) {
+      this.cachedCookies = {};
+      return this.cachedCookies;
+    }
+
+    // Cookie header is always a string (never array)
+    const cookieString = Array.isArray(cookieHeader) ? cookieHeader.join('; ') : cookieHeader;
+    const parsed = cookie.parse(cookieString);
+
+    // Filter out undefined values (cookie.parse can return undefined for malformed cookies)
+    this.cachedCookies = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (value !== undefined) {
+        this.cachedCookies[key] = value;
+      }
+    }
+
+    return this.cachedCookies;
+  }
+
+  /**
+   * Get parsed signed cookies (Express-compatible property)
+   *
+   * Returns signed cookies using the secret set via _setCookieSecret().
+   * This is the Express-compatible API that works with cookie-parser middleware pattern.
+   *
+   * If no secret is set, returns an empty object.
+   *
+   * @returns Object containing signed cookie name-value pairs
+   *
+   * @example
+   * ```typescript
+   * // Set secret (typically done by middleware or platform)
+   * req._setCookieSecret('my-secret');
+   *
+   * // Access signed cookies (Express-compatible)
+   * const cookies = req.signedCookies;
+   * console.log(cookies.session); // "abc123" (if signature is valid)
+   * ```
+   */
+  get signedCookies(): Record<string, string> {
+    if (!this.cookieSecret) {
+      return {};
+    }
+    return this.getSignedCookies(this.cookieSecret);
+  }
+
+  /**
+   * Get parsed signed cookies with explicit secret (method API)
+   *
+   * Parses signed cookies (prefixed with 's:') and verifies their signatures.
+   * Only returns cookies with valid signatures.
+   *
+   * This is an alternative API that allows passing the secret explicitly,
+   * useful for advanced use cases like multi-tenant applications.
+   *
+   * Note: This method does not cache results because the secret parameter may vary.
+   * However, it's typically called only once per request, so performance impact is minimal.
+   *
+   * @param secret - Secret key used to sign cookies
+   * @returns Object containing signed cookie name-value pairs
+   *
+   * @example
+   * ```typescript
+   * // Explicit secret (useful for multi-tenant scenarios)
+   * const cookies = req.getSignedCookies('my-secret');
+   * console.log(cookies.session); // "abc123" (if signature is valid)
+   * ```
+   */
+  getSignedCookies(secret: string): Record<string, string> {
+    const result: Record<string, string> = {};
+
+    for (const [name, value] of Object.entries(this.cookies)) {
+      if (value.startsWith('s:')) {
+        const unsigned = signature.unsign(value.slice(2), secret);
+        if (unsigned !== false) {
+          result[name] = unsigned;
+        }
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Set cookie secret for signed cookies
+   *
+   * This is typically called by middleware or the platform adapter to set
+   * the secret used for the Express-compatible signedCookies property.
+   *
+   * @param secret - Secret key used to sign cookies
+   * @internal
+   */
+  _setCookieSecret(secret: string): void {
+    this.cookieSecret = secret;
   }
 
   /**

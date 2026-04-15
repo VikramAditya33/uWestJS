@@ -3,22 +3,22 @@
  * @module platform
  */
 
-// Platform adapter will be exported here in Phase 2
-// export * from './uws-platform.adapter';
+// Platform adapter
+export * from './uws-platform.adapter';
 
-// Request/Response wrappers (Phase 1) (done)
+// Request/Response wrappers
 export * from './uws-request';
 export * from './uws-response';
 
-// Body parser (Phase 2 Task 2.1) (done)
+// Body parser
 export * from './body-parser';
 
-// Route registry will be exported here in Phase 2
-// export * from './route-registry';
+// Route registry
+export * from './route-registry';
 
-// HTTP execution context will be exported here in Phase 2
+// HTTP execution context will be exported here in Phase 3
 // export * from './http-context';
 
-// Advanced features will be exported here in Phase 3-4
+// Advanced features will be exported here in Phase 4
 // export * from './multipart-handler';
 // export * from './static-file-handler';
