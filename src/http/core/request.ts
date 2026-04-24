@@ -3,7 +3,7 @@ import { Readable } from 'stream';
 import * as cookie from 'cookie';
 import * as signature from 'cookie-signature';
 import type * as busboy from 'busboy';
-import type { MultipartHandler } from '../body/multipart-handler';
+import type { MultipartFieldHandler } from '../body/multipart-handler';
 import { MultipartFormHandler } from '../body/multipart-handler';
 
 /**
@@ -241,11 +241,18 @@ export class UwsRequest extends Readable {
     if (this.maxBodySize > 0 && this.totalReceivedBytes > this.maxBodySize) {
       // Size limit exceeded - mark as flushing and close connection
       this.flushing = true;
+      this.abortError = new Error('Body size limit exceeded');
       this.uwsRes.close();
 
       // Only emit error if not using fast abort (for proper error handling)
       if (!fastAbort) {
-        this.emit('error', new Error('Body size limit exceeded'));
+        // Only emit error if there are listeners to handle it
+        // This prevents uncaught errors when the stream is not being monitored
+        if (this.listenerCount('error') > 0) {
+          this.destroy(this.abortError);
+        } else {
+          this.destroy();
+        }
       }
       return;
     }
@@ -836,7 +843,11 @@ export class UwsRequest extends Readable {
    * @param fastAbort - Whether to close connection immediately on size limit (no HTTP status)
    * @internal
    */
-  _initBodyParser(maxBodySize: number, fastAbort = false): void {
+  _initBodyParser(
+    maxBodySize: number,
+    fastAbort = false,
+    response?: import('./response').UwsResponse
+  ): void {
     // Store size limit for enforcement
     this.maxBodySize = maxBodySize;
 
@@ -873,21 +884,35 @@ export class UwsRequest extends Readable {
     // We expect a body - set doneReadingData to false
     this.doneReadingData = false;
 
-    // CRITICAL: Register onAborted handler FIRST to detect client disconnects
-    // Without this, promises will hang forever if connection is aborted
-    this.uwsRes.onAborted(() => {
-      this.aborted = true;
-      this.abortError = new Error('Connection aborted');
-      this.flushing = true; // Stop processing chunks
+    // Register abort handler through response multiplexing if available
+    if (response) {
+      response._onAbort(() => {
+        this.aborted = true;
+        this.abortError = new Error('Connection aborted');
+        this.flushing = true; // Stop processing chunks
 
-      // Only emit error if there are listeners to handle it
-      // This prevents uncaught errors when the stream is not being monitored
-      if (this.listenerCount('error') > 0) {
-        this.destroy(this.abortError);
-      } else {
-        this.destroy();
-      }
-    });
+        // Only emit error if there are listeners to handle it
+        if (this.listenerCount('error') > 0) {
+          this.destroy(this.abortError);
+        } else {
+          this.destroy();
+        }
+      });
+    } else {
+      // Fallback: register directly on uwsRes (legacy behavior)
+      // This will overwrite any existing handler - not recommended
+      this.uwsRes.onAborted(() => {
+        this.aborted = true;
+        this.abortError = new Error('Connection aborted');
+        this.flushing = true;
+
+        if (this.listenerCount('error') > 0) {
+          this.destroy(this.abortError);
+        } else {
+          this.destroy();
+        }
+      });
+    }
 
     // Register onData callback for streaming infrastructure
     this.uwsRes.onData((chunk, isLast) => {
@@ -1215,12 +1240,12 @@ export class UwsRequest extends Readable {
    * ```
    */
   async multipart(
-    options: busboy.BusboyConfig | MultipartHandler,
-    handler?: MultipartHandler
+    options: busboy.BusboyConfig | MultipartFieldHandler,
+    handler?: MultipartFieldHandler
   ): Promise<void> {
     // Migrate options to handler if no options object is provided
     if (typeof options === 'function') {
-      handler = options as MultipartHandler;
+      handler = options as MultipartFieldHandler;
       options = {};
     }
 

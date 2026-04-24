@@ -72,9 +72,34 @@ export interface HttpOptions {
 
   /**
    * Trust proxy headers (X-Forwarded-*)
+   *
+   * - `false`: do not trust any proxy
+   * - `true`: trust all proxies
+   * - `number`: trust N hops from the front-facing proxy
+   * - `string | string[]`: trust specific IPs, CIDRs, or hostnames
+   * - `(ip, hopIndex) => boolean`: custom predicate function
+   *
    * @default false
+   *
+   * @example
+   * ```typescript
+   * // Trust all proxies
+   * trustProxy: true
+   *
+   * // Trust first proxy only
+   * trustProxy: 1
+   *
+   * // Trust specific IPs
+   * trustProxy: ['127.0.0.1', '::1']
+   *
+   * // Trust CIDR range
+   * trustProxy: '10.0.0.0/8'
+   *
+   * // Custom function
+   * trustProxy: (ip, hopIndex) => ip.startsWith('10.')
+   * ```
    */
-  trustProxy?: boolean;
+  trustProxy?: boolean | number | string | string[] | ((ip: string, hopIndex: number) => boolean);
 
   /**
    * ETag generation

@@ -1,4 +1,4 @@
-import { ArgumentsHost, ExceptionFilter, Logger, Type } from '@nestjs/common';
+import { ArgumentsHost, ExceptionFilter, HttpException, Logger, Type } from '@nestjs/common';
 import { EXCEPTION_FILTERS_METADATA } from '@nestjs/common/constants';
 import 'reflect-metadata';
 import { WsException } from '../../exceptions/ws-exception';
@@ -148,6 +148,11 @@ export class ExceptionFilterExecutor {
   private serializeException(exception: Error): unknown {
     if (exception instanceof WsException) {
       return exception.getError();
+    }
+
+    // Handle NestJS HttpException (e.g., ForbiddenException, UnauthorizedException)
+    if (exception instanceof HttpException) {
+      return exception.getResponse();
     }
 
     // For generic errors, log details server-side but return generic message to client

@@ -53,9 +53,11 @@ describe('FileWorkerPool', () => {
       expect(pool.size).toBe(3);
     });
 
-    it('should default to size 1', () => {
+    it('should default to CPU-aware size', () => {
       pool = new FileWorkerPool();
-      expect(pool.size).toBe(1);
+      // Default is Math.max(1, Math.min(4, os.cpus().length - 1))
+      expect(pool.size).toBeGreaterThanOrEqual(1);
+      expect(pool.size).toBeLessThanOrEqual(4);
     });
   });
 

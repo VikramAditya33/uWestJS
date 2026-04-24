@@ -60,6 +60,7 @@ export class UwsResponse extends Writable {
   private _headersSent = false;
   private finished = false;
   private aborted = false;
+  private sending = false; // Guard against re-entrancy in send()
 
   // Chunk batching properties
   private pendingChunks: Buffer[] = [];
@@ -77,43 +78,79 @@ export class UwsResponse extends Writable {
   // Stored when _final() is called and invoked when response truly finishes
   private pendingFinalCallback?: (error?: Error | null) => void;
 
+  // Abort callbacks for multiplexing
+  private abortCallbacks: Array<() => void> = [];
+  private abortHandlerRegistered = false;
+
   constructor(private readonly uwsRes: HttpResponse) {
     // Initialize Writable stream with platform-agnostic interface
     super({
       highWaterMark: HIGH_WATERMARK,
       // Note: We don't pass write/writev here because we override _write/_writev methods
     });
+  }
 
-    // Bind abort handler to track connection state
-    // This is required by uWS for async processing
-    uwsRes.onAborted(() => {
-      this.aborted = true;
-      this.finished = true;
-      // Clear any pending flush timeout
-      if (this.flushTimeout) {
-        clearTimeout(this.flushTimeout);
-        this.flushTimeout = undefined;
-      }
-      // Destroy active stream if streaming
-      if (
-        this.activeStream &&
-        'destroy' in this.activeStream &&
-        typeof this.activeStream.destroy === 'function'
-      ) {
-        this.activeStream.destroy();
-      }
+  /**
+   * Subscribe to abort event
+   * Allows multiple handlers to be registered without overwriting
+   * @internal
+   */
+  _onAbort(callback: () => void): void {
+    this.abortCallbacks.push(callback);
 
-      // Invoke pending _final callback if present (connection aborted before completion)
-      if (this.pendingFinalCallback) {
-        const callback = this.pendingFinalCallback;
-        this.pendingFinalCallback = undefined;
-        // Call with error to indicate abnormal termination
-        callback(new Error('Connection aborted'));
-      }
+    // Register native onAborted handler only once
+    if (!this.abortHandlerRegistered) {
+      this.abortHandlerRegistered = true;
+      this.uwsRes.onAborted(() => {
+        this.aborted = true;
+        this.finished = true;
 
-      // Emit 'close' event for Writable stream compatibility
-      this.emit('close');
-    });
+        // Clear any pending flush timeout
+        if (this.flushTimeout) {
+          clearTimeout(this.flushTimeout);
+          this.flushTimeout = undefined;
+        }
+
+        // Destroy active stream if streaming
+        if (
+          this.activeStream &&
+          'destroy' in this.activeStream &&
+          typeof this.activeStream.destroy === 'function'
+        ) {
+          this.activeStream.destroy();
+        }
+
+        // Invoke pending _final callback if present (connection aborted before completion)
+        if (this.pendingFinalCallback) {
+          const callback = this.pendingFinalCallback;
+          this.pendingFinalCallback = undefined;
+          callback(new Error('Connection aborted'));
+        }
+
+        // Emit 'close' event for Writable stream compatibility
+        this.emit('close');
+
+        // Invoke all registered abort callbacks
+        for (const cb of this.abortCallbacks) {
+          try {
+            cb();
+          } catch {
+            // Ignore errors in abort callbacks to prevent one callback from breaking others
+          }
+        }
+      });
+    }
+  }
+
+  /**
+   * Register abort cleanup handler
+   * Must be called after body parser initialization
+   * @internal
+   * @deprecated Use _onAbort() instead for multiplexing support
+   */
+  _registerAbortCleanup(): void {
+    // This method is now a no-op since _onAbort handles everything
+    // Kept for backward compatibility
   }
 
   /**
@@ -512,8 +549,14 @@ export class UwsResponse extends Writable {
       opts.maxAge = Math.floor(opts.maxAge / 1000);
     }
 
-    // Sign cookie if signed option is true and secret is provided
-    if (opts.signed && opts.secret) {
+    // Sign cookie if signed option is true
+    if (opts.signed) {
+      if (!opts.secret) {
+        throw new Error(
+          'cookie(): "signed: true" was set but no "secret" was provided. ' +
+            'Cannot create a signed cookie without a secret.'
+        );
+      }
       val = 's:' + signature.sign(val, opts.secret);
       delete opts.secret; // Remove secret before serialization
     }
@@ -1059,89 +1102,102 @@ export class UwsResponse extends Writable {
       throw new Error('Response already sent');
     }
 
+    if (this.sending) {
+      throw new Error('Response already being sent');
+    }
+
+    this.sending = true;
+
     this.atomic(() => {
-      // Flush any pending chunks first and check for backpressure
-      const flushed = this.flushChunks();
+      try {
+        // Flush any pending chunks first and check for backpressure
+        const flushed = this.flushChunks();
 
-      let finalBody: string | Buffer | undefined;
+        let finalBody: string | Buffer | undefined;
 
-      // Handle null/undefined
-      if (body === null || body === undefined) {
-        finalBody = undefined;
-      } else if (typeof body === 'string' || Buffer.isBuffer(body)) {
-        // String or Buffer - send as-is
-        finalBody = body;
-      } else if (typeof body === 'object') {
-        // Plain object/array - serialize as JSON
-        if (!this._headersSent && !this.hasHeader('content-type')) {
-          this.setHeader('content-type', 'application/json; charset=utf-8');
-        }
-        finalBody = JSON.stringify(body);
-      } else {
-        // Other types (shouldn't happen with our type signature, but be safe)
-        finalBody = String(body);
-      }
-
-      // Write headers if not already sent
-      if (!this._headersSent) {
-        this.writeHead();
-      }
-
-      // If flush failed due to backpressure, wait for socket to become writable
-      if (!flushed) {
-        // Set up onWritable handler to retry flushing and then end
-        this.uwsRes.onWritable((_offset: number) => {
-          // Check if connection was aborted while waiting
-          if (this.aborted) {
-            return true; // Remove handler, connection is gone
+        // Handle null/undefined
+        if (body === null || body === undefined) {
+          finalBody = undefined;
+        } else if (typeof body === 'string' || Buffer.isBuffer(body)) {
+          // String or Buffer - send as-is
+          finalBody = body;
+        } else if (typeof body === 'object') {
+          // Plain object/array - serialize as JSON
+          if (!this._headersSent && !this.hasHeader('content-type')) {
+            this.setHeader('content-type', 'application/json; charset=utf-8');
           }
-
-          // Try to flush pending chunks again
-          const retryFlushed = this.flushChunks();
-
-          if (retryFlushed) {
-            // Successfully flushed, now send the final body
-            if (finalBody !== undefined) {
-              this.uwsRes.end(finalBody);
-            } else {
-              this.uwsRes.end();
-            }
-
-            this.finished = true;
-
-            // Invoke pending _final callback if present
-            if (this.pendingFinalCallback) {
-              const callback = this.pendingFinalCallback;
-              this.pendingFinalCallback = undefined;
-              callback();
-            }
-
-            this.emit('finish');
-
-            return true; // Done, remove handler
-          }
-
-          // Still backpressure, keep handler registered
-          return false;
-        });
-      } else {
-        // No backpressure, send immediately
-        if (finalBody !== undefined) {
-          this.uwsRes.end(finalBody);
+          finalBody = JSON.stringify(body);
         } else {
-          this.uwsRes.end();
+          // Other types (shouldn't happen with our type signature, but be safe)
+          finalBody = String(body);
         }
 
-        this.finished = true;
-
-        // Invoke pending _final callback if present
-        if (this.pendingFinalCallback) {
-          const callback = this.pendingFinalCallback;
-          this.pendingFinalCallback = undefined;
-          callback();
+        // Write headers if not already sent
+        if (!this._headersSent) {
+          this.writeHead();
         }
 
-        this.emit('finish');
+        // If flush failed due to backpressure, wait for socket to become writable
+        if (!flushed) {
+          // Set up onWritable handler to retry flushing and then end
+          this.uwsRes.onWritable((_offset: number) => {
+            // Check if connection was aborted while waiting
+            if (this.aborted) {
+              return true; // Remove handler, connection is gone
+            }
+
+            // Try to flush pending chunks again
+            const retryFlushed = this.flushChunks();
+
+            if (retryFlushed) {
+              // Successfully flushed, now send the final body
+              if (finalBody !== undefined) {
+                this.uwsRes.end(finalBody);
+              } else {
+                this.uwsRes.end();
+              }
+
+              this.finished = true;
+              this.sending = false;
+
+              // Invoke pending _final callback if present
+              if (this.pendingFinalCallback) {
+                const callback = this.pendingFinalCallback;
+                this.pendingFinalCallback = undefined;
+                callback();
+              }
+
+              this.emit('finish');
+
+              return true; // Done, remove handler
+            }
+
+            // Still backpressure, keep handler registered
+            return false;
+          });
+        } else {
+          // No backpressure, send immediately
+          if (finalBody !== undefined) {
+            this.uwsRes.end(finalBody);
+          } else {
+            this.uwsRes.end();
+          }
+
+          this.finished = true;
+          this.sending = false;
+
+          // Invoke pending _final callback if present
+          if (this.pendingFinalCallback) {
+            const callback = this.pendingFinalCallback;
+            this.pendingFinalCallback = undefined;
+            callback();
+          }
+
+          this.emit('finish');
+        }
+      } catch (error) {
+        this.sending = false;
+        throw error;
       }
     });
   }

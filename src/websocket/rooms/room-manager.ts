@@ -31,7 +31,7 @@ export class RoomManager {
     }
 
     const rooms = Array.isArray(room) ? room : [room];
-    const validRooms = rooms.map((r) => r?.trim()).filter(Boolean);
+    const validRooms = rooms.map((r) => r?.trim()).filter((r): r is string => Boolean(r));
 
     if (validRooms.length === 0) {
       this.logger.warn(`Client ${clientId} attempted to join with no valid rooms`);
@@ -62,7 +62,7 @@ export class RoomManager {
     }
 
     const rooms = Array.isArray(room) ? room : [room];
-    const validRooms = rooms.map((r) => r?.trim()).filter(Boolean);
+    const validRooms = rooms.map((r) => r?.trim()).filter((r): r is string => Boolean(r));
 
     if (validRooms.length === 0) {
       this.logger.warn(`Client ${clientId} attempted to leave with no valid rooms`);
@@ -113,7 +113,7 @@ export class RoomManager {
    * ```
    */
   getClientsInRoom(room: string): Set<string> {
-    const roomClients = this.rooms.get(room);
+    const roomClients = this.rooms.get(room?.trim());
     return roomClients ? new Set(roomClients) : new Set();
   }
 
@@ -170,7 +170,7 @@ export class RoomManager {
    * ```
    */
   isClientInRoom(clientId: string, room: string): boolean {
-    const roomClients = this.rooms.get(room);
+    const roomClients = this.rooms.get(room?.trim());
     return roomClients ? roomClients.has(clientId) : false;
   }
 

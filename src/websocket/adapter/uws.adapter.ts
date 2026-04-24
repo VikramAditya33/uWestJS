@@ -147,6 +147,19 @@ export class UwsAdapter implements WebSocketAdapter {
             'the HTTP server manages the listening port.'
         );
       }
+
+      // Warn if SSL options are also specified (TLS is controlled by the shared app)
+      if (
+        options.cert_file_name ||
+        options.key_file_name ||
+        options.passphrase ||
+        options.dh_params_file_name ||
+        options.ssl_prefer_low_memory_usage !== undefined
+      ) {
+        this.logger.warn(
+          'SSL/TLS options are ignored when uwsApp is provided - the shared uWS instance controls TLS configuration.'
+        );
+      }
     }
 
     // Initialize handler executor with optional ModuleRef for DI support

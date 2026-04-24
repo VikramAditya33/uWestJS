@@ -153,6 +153,12 @@ export class MetadataScanner {
     const handlers = this.scanForMessageHandlers(instance);
     if (handlers.length === 0) return null;
 
+    // Pre-compute eventKey for object patterns to avoid repeated serialization
+    const eventKey =
+      typeof event === 'object' && event !== null
+        ? JSON.stringify(this.sortObjectKeys(event))
+        : undefined;
+
     const handler = handlers.find((h) => {
       // String pattern matching
       if (typeof h.message === 'string' && typeof event === 'string') {
@@ -165,7 +171,6 @@ export class MetadataScanner {
         typeof event === 'object' &&
         event !== null
       ) {
-        const eventKey = JSON.stringify(this.sortObjectKeys(event));
         return h.messageKey === eventKey;
       }
       return false;
@@ -195,6 +200,7 @@ export class MetadataScanner {
           ? this.sortObjectKeys(value as Record<string, unknown>, seen)
           : value;
     }
+    seen.delete(obj);
     return sorted;
   }
 }

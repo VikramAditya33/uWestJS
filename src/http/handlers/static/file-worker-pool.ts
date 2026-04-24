@@ -11,6 +11,7 @@
  */
 
 import { Worker } from 'worker_threads';
+import * as os from 'os';
 
 interface WorkerTask {
   resolve: (data: ArrayBuffer) => void;
@@ -198,9 +199,12 @@ export class FileWorkerPool {
   private terminated = false;
   private readonly poolSize: number;
 
-  constructor(size: number = 1) {
-    this.poolSize = size;
-    for (let i = 0; i < size; i++) {
+  constructor(size?: number) {
+    // Default to CPU-aware pool size for better concurrency
+    // Use at least 1, at most 4, and leave 1 CPU for the main thread
+    const defaultSize = Math.max(1, Math.min(4, os.cpus().length - 1));
+    this.poolSize = size ?? defaultSize;
+    for (let i = 0; i < this.poolSize; i++) {
       this.workers.push(this.createWorker());
     }
   }
@@ -316,7 +320,8 @@ export class FileWorkerPool {
     }
     this.workerTasks.clear();
 
-    await Promise.all(this.workers.map((w) => w.terminate()));
+    // Use allSettled to ensure cleanup always runs even if some workers fail to terminate
+    await Promise.allSettled(this.workers.map((w) => w.terminate()));
     this.workers = [];
   }
 }

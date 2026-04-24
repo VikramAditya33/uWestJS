@@ -50,7 +50,8 @@ describe('RoomManager', () => {
       expect(roomManager.getRoomsForClient('client-1').size).toBe(2);
       expect(roomManager.isClientInRoom('client-1', 'lobby')).toBe(true);
       expect(roomManager.isClientInRoom('client-1', 'game-1')).toBe(true);
-      expect(roomManager.isClientInRoom('client-1', '  lobby  ')).toBe(false);
+      // Lookups are now consistent - trimmed room names match
+      expect(roomManager.isClientInRoom('client-1', '  lobby  ')).toBe(true);
     });
 
     it('should reject when all room names are empty', () => {

@@ -360,6 +360,7 @@ describe('UwsPlatformAdapter', () => {
         send: jest.fn(),
         setHeader: jest.fn(),
         getHeader: jest.fn(),
+        redirect: jest.fn(),
       };
     });
 
@@ -386,9 +387,7 @@ describe('UwsPlatformAdapter', () => {
     it('should redirect', () => {
       adapter.redirect(mockResponse, 302, 'https://example.com');
 
-      expect(mockResponse.status).toHaveBeenCalledWith(302);
-      expect(mockResponse.setHeader).toHaveBeenCalledWith('Location', 'https://example.com');
-      expect(mockResponse.send).toHaveBeenCalled();
+      expect(mockResponse.redirect).toHaveBeenCalledWith('https://example.com', 302);
     });
 
     it('should set header', () => {

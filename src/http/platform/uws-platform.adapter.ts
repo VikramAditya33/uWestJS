@@ -22,7 +22,7 @@ import type { StaticFileOptions } from '../handlers/static/static-file-handler';
 type ResolvedPlatformOptions = {
   // HTTP options (always defined)
   maxBodySize: number;
-  trustProxy: boolean;
+  trustProxy: boolean | number | string | string[] | ((ip: string, hopIndex: number) => boolean);
   etag: false | 'weak' | 'strong';
   bodyParser: {
     json: boolean;
@@ -492,9 +492,7 @@ export class UwsPlatformAdapter extends AbstractHttpAdapter {
    * Send redirect response
    */
   redirect(response: UwsResponse, statusCode: number, url: string): void {
-    response.status(statusCode);
-    response.setHeader('Location', url);
-    response.send();
+    response.redirect(url, statusCode);
   }
 
   /**
@@ -788,6 +786,11 @@ export class UwsPlatformAdapter extends AbstractHttpAdapter {
           if (normalizedPrefix && filePath.startsWith(normalizedPrefix)) {
             filePath = filePath.substring(normalizedPrefix.length);
           }
+        }
+
+        // Normalize empty path to root
+        if (filePath === '') {
+          filePath = '/';
         }
 
         await handler.serve(req, res, filePath);

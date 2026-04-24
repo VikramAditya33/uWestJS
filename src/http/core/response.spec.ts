@@ -18,13 +18,20 @@ describe('UwsResponse', () => {
   });
 
   describe('constructor', () => {
-    it('should bind abort handler', () => {
-      createResponse();
+    it('should register abort handler lazily', () => {
+      res = createResponse();
+      expect(mockUwsRes.onAborted).not.toHaveBeenCalled();
+
+      // Register abort handler by calling _onAbort
+      res._onAbort(() => {});
       expect(mockUwsRes.onAborted).toHaveBeenCalled();
     });
 
     it('should mark as aborted and finished when connection aborts', () => {
       res = createResponse();
+
+      // Register abort handler by calling _onAbort
+      res._onAbort(() => {});
 
       expect(res.isAborted).toBe(false);
       expect(res.isFinished).toBe(false);
@@ -464,6 +471,7 @@ describe('UwsResponse', () => {
       res = createResponse();
       const callback = jest.fn();
 
+      res._onAbort(() => {});
       callbacks.onAborted!();
       mockUwsRes.cork = jest.fn();
 
@@ -534,6 +542,7 @@ describe('UwsResponse', () => {
     });
 
     it('should not throw if aborted', () => {
+      res._onAbort(() => {});
       callbacks.onAborted!();
       expect(() => res.send('Hello')).not.toThrow();
       expect(mockUwsRes.end).not.toHaveBeenCalled();
@@ -760,7 +769,14 @@ describe('UwsResponse', () => {
 
     it.each([
       ['finished', 'isFinished', () => res.send()],
-      ['aborted', 'isAborted', () => callbacks.onAborted!()],
+      [
+        'aborted',
+        'isAborted',
+        () => {
+          res._onAbort(() => {});
+          callbacks.onAborted!();
+        },
+      ],
       ['headers sent', 'headersSent', () => res.send()],
     ])('should track %s state', (_description, property, trigger) => {
       expect(res[property as keyof UwsResponse]).toBe(false);
@@ -866,6 +882,7 @@ describe('UwsResponse', () => {
     });
 
     it('should return false if response is aborted', () => {
+      res._onAbort(() => {});
       callbacks.onAborted!();
       const result = res.writeChunk('Too late');
 
@@ -877,6 +894,7 @@ describe('UwsResponse', () => {
       res.writeChunk('First');
       res.writeChunk(' Second'); // Batched, timeout scheduled
 
+      res._onAbort(() => {});
       callbacks.onAborted!();
 
       // Advance time - should not flush
@@ -1029,6 +1047,7 @@ describe('UwsResponse', () => {
     it('should not stream if aborted', async () => {
       const readable = createManualReadable([Buffer.from('chunk')]);
 
+      res._onAbort(() => {});
       callbacks.onAborted!();
 
       await res.stream(readable);
@@ -1051,6 +1070,7 @@ describe('UwsResponse', () => {
 
       // Simulate abort after stream() starts waiting
       await new Promise((resolve) => setImmediate(resolve));
+      res._onAbort(() => {});
       callbacks.onAborted!();
 
       // Stream should resolve (not hang) and destroy should be called

@@ -72,7 +72,7 @@ export type MultipartLimitReject =
 /**
  * Handler for processing multipart fields
  */
-export type MultipartHandler = (field: MultipartField) => void | Promise<void>;
+export type MultipartFieldHandler = (field: MultipartField) => void | Promise<void>;
 
 /**
  * Multipart form-data parser
@@ -111,7 +111,7 @@ export class MultipartFormHandler {
    * @throws {MultipartLimitReject} When busboy limits are exceeded
    * @throws {Error} When parsing fails
    */
-  async parse(handler: MultipartHandler): Promise<void> {
+  async parse(handler: MultipartFieldHandler): Promise<void> {
     // Guard against multiple parse() calls
     if (this.parsing) {
       throw new Error('parse() has already been called');
@@ -220,7 +220,7 @@ export class MultipartFormHandler {
    * Handle a regular field
    */
   private async handleField(
-    handler: MultipartHandler,
+    handler: MultipartFieldHandler,
     name: string,
     value: string,
     info: busboy.FieldInfo
@@ -241,7 +241,7 @@ export class MultipartFormHandler {
    * Handle a file field
    */
   private async handleFile(
-    handler: MultipartHandler,
+    handler: MultipartFieldHandler,
     name: string,
     stream: Readable & { truncated?: boolean },
     info: busboy.FileInfo
@@ -268,7 +268,10 @@ export class MultipartFormHandler {
   /**
    * Execute handler with proper async handling and backpressure
    */
-  private async executeHandler(handler: MultipartHandler, field: MultipartField): Promise<void> {
+  private async executeHandler(
+    handler: MultipartFieldHandler,
+    field: MultipartField
+  ): Promise<void> {
     // Wait for previous handler if still executing
     // Use while loop to handle race condition where multiple handlers
     // await the same promise and all resume when it resolves
@@ -287,8 +290,12 @@ export class MultipartFormHandler {
     // Now safe to resume - any new events will see multipartPromise and wait
     this.request.resume();
 
-    // Wait for handler to complete
-    await handlerPromise;
-    this.multipartPromise = null;
+    try {
+      // Wait for handler to complete
+      await handlerPromise;
+    } finally {
+      // Clear promise even if handler throws to avoid stale state
+      this.multipartPromise = null;
+    }
   }
 }

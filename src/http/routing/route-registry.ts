@@ -273,9 +273,11 @@ export class RouteRegistry {
               req._setParams(matches);
 
               // Initialize body parser with configured size limit and fast abort option
+              // Pass response for abort multiplexing
               req._initBodyParser(
                 this.options.maxBodySize ?? 1024 * 1024,
-                this.options.fastAbort ?? false
+                this.options.fastAbort ?? false,
+                res
               );
 
               // Execute handler with error handling

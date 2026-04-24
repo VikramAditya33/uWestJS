@@ -8,6 +8,12 @@ import { UwsResponse } from './response';
 type RouteHandler = (req: UwsRequest, res: UwsResponse) => void | Promise<void>;
 
 /**
+ * uWebSockets.js doesn't use Express-style next() middleware chaining,
+ * so getNext() returns this shared no-op to avoid allocating closures on every call.
+ */
+const NOOP_NEXT = () => {};
+
+/**
  * HTTP execution context for NestJS.
  * Provides access to request, response, and handler metadata for guards, interceptors, and pipes.
  *
@@ -84,8 +90,7 @@ export class HttpExecutionContext implements ExecutionContext {
     return {
       getRequest: <T = UwsRequest>() => this.request as T,
       getResponse: <T = UwsResponse>() => this.response as T,
-      // uWebSockets.js doesn't use Express-style next() middleware chaining
-      getNext: <T = () => void>() => (() => {}) as T,
+      getNext: <T = () => void>() => NOOP_NEXT as T,
     };
   }
 

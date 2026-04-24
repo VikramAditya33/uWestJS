@@ -206,14 +206,14 @@ export class StaticFileHandler {
     try {
       // Validate and resolve path
       const decodedPath = this.validateAndDecodePath(filePath, res);
-      if (!decodedPath) return;
+      if (decodedPath === null) return; // Response already sent
 
       const fullPath = this.resolveAndValidatePath(decodedPath, res);
-      if (!fullPath) return;
+      if (fullPath === null) return; // Response already sent
 
       // Get file stats and resolve symlinks
       const fileInfo = await this.getFileStat(fullPath, res);
-      if (!fileInfo) return;
+      if (fileInfo === null) return; // Response already sent
 
       const { realPath, stat } = fileInfo;
 
@@ -520,13 +520,14 @@ export class StaticFileHandler {
 
     // Check If-Match (RFC 7232 Section 3.1 - requires strong comparison)
     if (ifMatchStr) {
+      // Per RFC 7232 §3.1, `If-Match: *` succeeds if server has any representation
+      if (ifMatchStr === '*') return false;
+
       const etag = res.getHeader('etag') as string;
       if (!etag) return true;
 
       // If-Match with weak ETag always fails (strong comparison required)
       if (etag.startsWith('W/')) return true;
-
-      if (ifMatchStr === '*') return false;
 
       // Parse token list and filter out weak ETags (strong comparison)
       const matches = this.parseTokenList(ifMatchStr);
@@ -659,11 +660,11 @@ export class StaticFileHandler {
   }
 
   /**
-   * Skip whitespace characters
+   * Skip whitespace characters (space and tab)
    */
   private skipWhitespace(str: string, start: number, len: number): number {
     let i = start;
-    while (i < len && str.charCodeAt(i) === 0x20) i++;
+    while (i < len && (str.charCodeAt(i) === 0x20 || str.charCodeAt(i) === 0x09)) i++;
     return i;
   }
 
@@ -686,8 +687,14 @@ export class StaticFileHandler {
       if (i < len) i++; // skip closing quote
       end = i;
     } else {
-      // Handle unquoted token
-      while (i < len && str.charCodeAt(i) !== 0x2c && str.charCodeAt(i) !== 0x20) i++;
+      // Handle unquoted token - stop on comma, space, or tab
+      while (
+        i < len &&
+        str.charCodeAt(i) !== 0x2c && // comma
+        str.charCodeAt(i) !== 0x20 && // space
+        str.charCodeAt(i) !== 0x09 // tab
+      )
+        i++;
       end = i;
     }
 
