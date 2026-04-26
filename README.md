@@ -4,34 +4,80 @@
 
 # uWestJS
 
-> High-performance WebSocket adapter for NestJS using uWebSockets.js
+> High-performance HTTP and WebSocket platform for NestJS using uWebSockets.js
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js Version](https://img.shields.io/badge/node-20%20%7C%2022%20%7C%2024%20%7C%2025-brightgreen)](https://nodejs.org)
 [![CodeFactor](https://www.codefactor.io/repository/github/vikramaditya33/uwestjs/badge)](https://www.codefactor.io/repository/github/vikramaditya33/uwestjs)
 
-uWestJS is a drop-in replacement for the default NestJS WebSocket adapter, powered by [uWebSockets.js](https://github.com/uNetworking/uWebSockets.js). It provides significantly better performance while maintaining full compatibility with NestJS decorators and patterns you already know.
+uWestJS is a high-performance platform adapter for NestJS, powered by [uWebSockets.js](https://github.com/uNetworking/uWebSockets.js). It provides both HTTP and WebSocket capabilities with significantly better performance while maintaining full compatibility with NestJS decorators and patterns you already know.
 
 ## Why uWestJS?
 
-uWebSockets.js is one of the fastest WebSocket implementations available, offering:
+uWebSockets.js is one of the fastest HTTP and WebSocket implementations available, offering:
 
-- **10x faster** than traditional WebSocket libraries
+- **Up to 10x faster** than Express and traditional WebSocket libraries in benchmarks
 - **Lower memory footprint** for handling thousands of concurrent connections
 - **Native backpressure handling** to prevent memory issues under load
 - **Built-in compression** support for reduced bandwidth usage
+- **Streaming support** with automatic backpressure management
 
-uWestJS brings this performance to NestJS without requiring you to change your existing gateway code.
+uWestJS brings this performance to NestJS without requiring you to change your existing code.
+
+## Documentation
+
+### WebSocket Documentation
+- [Adapter](./docs/websocket/Adapter.md) - UwsAdapter configuration and methods
+- [Socket API](./docs/websocket/Socket.md) - UwsSocket properties and methods
+- [Broadcasting](./docs/websocket/Broadcasting.md) - BroadcastOperator and broadcasting patterns
+- [Decorators](./docs/websocket/Decorators.md) - NestJS WebSocket decorators
+- [Rooms](./docs/websocket/Rooms.md) - Room operations and patterns
+- [Middleware](./docs/websocket/Middleware.md) - Guards, Pipes, and Filters
+- [Exceptions](./docs/websocket/Exceptions.md) - WsException and error handling
+- [Lifecycle](./docs/websocket/Lifecycle.md) - Gateway lifecycle management
+
+### HTTP Documentation
+- [Server](./docs/http/Server.md) - Server setup and configuration
+- [Request](./docs/http/Request.md) - HTTP request object and methods
+- [Response](./docs/http/Response.md) - HTTP response object and methods
+- [Routing](./docs/http/Routing.md) - Route registration and path parameters
+- [Middleware](./docs/http/Middleware.md) - Guards, Pipes, Filters, and Interceptors
+- [Body Parsing](./docs/http/Body-Parsing.md) - JSON, form data, and more
+- [Multipart](./docs/http/Multipart.md) - File uploads and multipart forms
+- [Compression](./docs/http/Compression.md) - Request/response compression
+- [CORS](./docs/http/CORS.md) - Cross-origin resource sharing
+- [Static Files](./docs/http/Static-Files.md) - Static file serving
 
 ## Features
 
-- Full compatibility with NestJS WebSocket decorators (`@SubscribeMessage`, `@MessageBody`, `@ConnectedSocket`)
-- Support for all NestJS middleware: Guards, Pipes, Filters, and Interceptors
-- Room-based broadcasting for efficient message distribution
-- Built-in CORS configuration
-- Automatic message queuing with backpressure handling
-- TypeScript support with full type definitions
-- Comprehensive test coverage
+### HTTP Features
+- **High Performance** - Up to 10x faster than Express for HTTP requests → [Server Documentation](./docs/http/Server.md)
+- **Request Handling** - Full Express-compatible request API with body parsing, headers, cookies, and more → [Request API](./docs/http/Request.md)
+- **Response Handling** - Comprehensive response methods including streaming, compression, and caching → [Response API](./docs/http/Response.md)
+- **Routing** - Path parameters, wildcards, and route registration → [Routing Guide](./docs/http/Routing.md)
+- **Body Parsing** - Automatic parsing for JSON, URL-encoded, multipart, raw, and text → [Body Parsing](./docs/http/Body-Parsing.md)
+- **File Uploads** - Multipart form data and file upload handling → [Multipart Guide](./docs/http/Multipart.md)
+- **Static Files** - Advanced static file serving with caching, range requests, and ETag support → [Static Files](./docs/http/Static-Files.md)
+- **Middleware** - Full support for Guards, Pipes, Filters, and Interceptors → [HTTP Middleware](./docs/http/Middleware.md)
+- **Compression** - Request and response compression support → [Compression](./docs/http/Compression.md)
+- **CORS** - Flexible cross-origin resource sharing configuration → [CORS Configuration](./docs/http/CORS.md)
+
+### WebSocket Features
+- **NestJS Compatibility** - Full support for `@SubscribeMessage`, `@MessageBody`, `@ConnectedSocket` decorators → [Decorators](./docs/websocket/Decorators.md)
+- **Room Management** - Efficient room-based broadcasting and client organization → [Rooms Guide](./docs/websocket/Rooms.md)
+- **Broadcasting** - Powerful broadcasting operators for targeted message distribution → [Broadcasting](./docs/websocket/Broadcasting.md)
+- **Middleware Support** - Guards, Pipes, and Filters for WebSocket handlers → [WebSocket Middleware](./docs/websocket/Middleware.md)
+- **Lifecycle Management** - Gateway lifecycle hooks and connection management → [Lifecycle](./docs/websocket/Lifecycle.md)
+- **Exception Handling** - WsException and error handling patterns → [Exceptions](./docs/websocket/Exceptions.md)
+- **Backpressure Handling** - Automatic message queuing when clients are slow
+- **CORS Configuration** - Built-in CORS support for WebSocket connections
+- **Compression** - Per-message deflate compression support
+
+### General Features
+- **TypeScript Support** - Full type definitions and TypeScript-first design
+- **Dependency Injection** - Full NestJS DI support for all middleware
+- **Shared or Separate Ports** - Run HTTP and WebSocket on the same port or separate ports
+- **Production Ready** - Comprehensive test coverage and battle-tested in production
 
 ## Installation
 
@@ -64,77 +110,33 @@ pnpm add uwestjs
 
 ## Quick Start
 
-### Basic Setup
-
-Replace your existing WebSocket adapter with uWestJS in your `main.ts`:
+### HTTP Server
 
 ```typescript
 import { NestFactory } from '@nestjs/core';
-import { UwsAdapter } from 'uwestjs';
+import { UwsPlatformAdapter } from 'uwestjs';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const adapter = new UwsPlatformAdapter();
+  const app = await NestFactory.create(AppModule, adapter);
   
-  // Use uWestJS adapter
-  app.useWebSocketAdapter(new UwsAdapter(app));
-  
-  await app.listen(3000);
+  await app.init();
+  adapter.listen(3000, () => {
+    console.log('HTTP server running on port 3000');
+  });
 }
 bootstrap();
 ```
 
-### Create a Gateway
+See [Server Documentation](./docs/http/Server.md) for detailed setup instructions.
 
-Your existing NestJS gateways work without modification:
-
-```typescript
-import {
-  WebSocketGateway,
-  SubscribeMessage,
-  MessageBody,
-  ConnectedSocket,
-} from '@nestjs/websockets';
-
-@WebSocketGateway()
-export class ChatGateway {
-  @SubscribeMessage('message')
-  handleMessage(
-    @MessageBody() data: string,
-    @ConnectedSocket() client: any,
-  ) {
-    return { event: 'response', data: `Echo: ${data}` };
-  }
-
-  @SubscribeMessage('join')
-  handleJoin(
-    @MessageBody() room: string,
-    @ConnectedSocket() client: any,
-  ) {
-    client.join(room);
-    return { event: 'joined', data: room };
-  }
-
-  @SubscribeMessage('broadcast')
-  handleBroadcast(
-    @MessageBody() payload: { room: string; message: string },
-    @ConnectedSocket() client: any,
-  ) {
-    client.to(payload.room).emit('message', payload.message);
-    return { event: 'broadcasted' };
-  }
-}
-```
-
-### Register the Gateway
-
-After creating your adapter, register your gateway:
+### WebSocket Server
 
 ```typescript
 import { NestFactory } from '@nestjs/core';
 import { UwsAdapter } from 'uwestjs';
 import { AppModule } from './app.module';
-import { ChatGateway } from './chat.gateway';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -142,413 +144,174 @@ async function bootstrap() {
   const adapter = new UwsAdapter(app, { port: 8099 });
   app.useWebSocketAdapter(adapter);
   
-  // Register your gateway
-  const chatGateway = app.get(ChatGateway);
-  adapter.registerGateway(chatGateway);
+  // Replace YourGateway with your actual gateway class
+  const gateway = app.get(YourGateway);
+  adapter.registerGateway(gateway);
   
   await app.listen(3000);
 }
 bootstrap();
 ```
 
-## Configuration
+See [Adapter Documentation](./docs/websocket/Adapter.md) for detailed setup instructions.
 
-### Adapter Options
-
-Configure the adapter with various options:
+### HTTP + WebSocket (Shared Port)
 
 ```typescript
-import { UwsAdapter } from 'uwestjs';
+import { NestFactory } from '@nestjs/core';
+import { UwsPlatformAdapter, UwsAdapter } from 'uwestjs';
+import { AppModule } from './app.module';
+
+async function bootstrap() {
+  const httpAdapter = new UwsPlatformAdapter();
+  const app = await NestFactory.create(AppModule, httpAdapter);
+  
+  const wsAdapter = new UwsAdapter(app, { 
+    uwsApp: httpAdapter.getHttpServer(),
+    path: '/ws'
+  });
+  app.useWebSocketAdapter(wsAdapter);
+  
+  // Replace YourGateway with your actual gateway class
+  const gateway = app.get(YourGateway);
+  wsAdapter.registerGateway(gateway);
+  
+  await app.init();
+  httpAdapter.listen(3000, () => {
+    console.log('HTTP and WebSocket running on port 3000');
+  });
+}
+bootstrap();
+```
+
+See [Server Documentation](./docs/http/Server.md) for more deployment patterns.
+
+## Configuration
+
+### HTTP Configuration
+
+Configure the HTTP platform adapter with SSL, compression, and more:
+
+```typescript
+const adapter = new UwsPlatformAdapter({
+  key_file_name: 'key.pem',
+  cert_file_name: 'cert.pem',
+});
+```
+
+See [Server Documentation](./docs/http/Server.md) for all configuration options.
+
+### WebSocket Configuration
+
+Configure the WebSocket adapter with compression, timeouts, CORS, and more:
+
+```typescript
 import * as uWS from 'uWebSockets.js';
 
 const adapter = new UwsAdapter(app, {
-  // WebSocket server port
   port: 8099,
-  
-  // Maximum message size (in bytes)
-  maxPayloadLength: 16384, // 16KB
-  
-  // Idle timeout (in seconds)
-  idleTimeout: 60,
-  
-  // WebSocket endpoint path
   path: '/ws',
-  
-  // Compression settings
+  maxPayloadLength: 16384,
+  idleTimeout: 60,
   compression: uWS.SHARED_COMPRESSOR,
-  
-  // CORS configuration
   cors: {
-    origin: 'https://example.com', // Specific origin for security
+    origin: 'https://example.com',
     credentials: true,
-    methods: ['GET', 'POST'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
   },
 });
 ```
 
+See [Adapter Documentation](./docs/websocket/Adapter.md) for all configuration options.
+
 ### CORS Configuration
 
-Control cross-origin access to your WebSocket server:
+Both HTTP and WebSocket support flexible CORS configuration:
 
-```typescript
-// Specific origin (recommended for production)
-cors: {
-  origin: 'https://example.com',
-}
+- Specific origins (recommended for production)
+- Multiple origins
+- Dynamic origin validation
+- Credentials support
 
-// Allow all origins (use only for development/testing)
-cors: { origin: '*' }
+See [HTTP CORS](./docs/http/CORS.md) and [Adapter Documentation](./docs/websocket/Adapter.md) for details.
 
-// Allow multiple origins
-cors: {
-  origin: ['https://example.com', 'https://app.example.com'],
-}
+### Middleware Configuration
 
-// Dynamic origin validation (recommended for flexible security)
-cors: {
-  origin: (origin) => {
-    return origin?.endsWith('.example.com') ?? false;
-  },
-  credentials: true,
-}
-```
-
-**Security Note:** Never use `origin: '*'` with `credentials: true` in production. This combination is a security risk as it allows any origin to make authenticated requests. Always specify exact origins or use a validation function.
-
-### Dependency Injection Support
-
-Enable dependency injection for guards, pipes, and filters:
+Enable dependency injection for Guards, Pipes, and Filters:
 
 ```typescript
 import { ModuleRef } from '@nestjs/core';
 
-const app = await NestFactory.create(AppModule);
 const moduleRef = app.get(ModuleRef);
-
 const adapter = new UwsAdapter(app, {
   port: 8099,
-  moduleRef, // Enable DI support
+  moduleRef,
 });
 ```
 
-This allows your guards, pipes, and filters to inject services:
-
-```typescript
-import { Injectable, CanActivate } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-
-@Injectable()
-export class WsAuthGuard implements CanActivate {
-  constructor(private jwtService: JwtService) {}
-  
-  canActivate(context: any): boolean {
-    try {
-      const data = context.switchToWs().getData();
-      const token = data?.token;
-      if (!token) return false;
-      
-      const payload = this.jwtService.verify(token);
-      const client = context.switchToWs().getClient();
-      client.data = { user: payload, authenticated: true };
-      return true;
-    } catch {
-      return false;
-    }
-  }
-}
-}
-```
-
-## Usage Examples
-
-### Using Guards
-
-Protect your WebSocket handlers with guards:
-
-```typescript
-import { UseGuards } from '@nestjs/common';
-import { SubscribeMessage, MessageBody } from '@nestjs/websockets';
-
-@WebSocketGateway()
-export class SecureGateway {
-  @UseGuards(WsAuthGuard)
-  @SubscribeMessage('secure-action')
-  handleSecureAction(@MessageBody() data: any) {
-    return { event: 'success', data };
-  }
-}
-```
-
-### Using Pipes
-
-Transform and validate incoming data:
-
-```typescript
-import { UsePipes, ValidationPipe } from '@nestjs/common';
-import { SubscribeMessage, MessageBody } from '@nestjs/websockets';
-import { IsString, IsNotEmpty } from 'class-validator';
-
-class MessageDto {
-  @IsString()
-  @IsNotEmpty()
-  content: string;
-}
-
-@WebSocketGateway()
-export class ChatGateway {
-  @UsePipes(new ValidationPipe())
-  @SubscribeMessage('message')
-  handleMessage(@MessageBody() dto: MessageDto) {
-    return { event: 'message', data: dto.content };
-  }
-}
-```
-
-### Using Filters
-
-Handle exceptions gracefully:
-
-```typescript
-import { Catch, ArgumentsHost } from '@nestjs/common';
-import { BaseWsExceptionFilter } from '@nestjs/websockets';
-
-@Catch()
-export class WsExceptionFilter extends BaseWsExceptionFilter {
-  catch(exception: any, host: ArgumentsHost) {
-    const client = host.switchToWs().getClient();
-    client.emit('error', {
-      message: exception.message,
-    });
-  }
-}
-
-@UseFilters(WsExceptionFilter)
-@WebSocketGateway()
-export class ChatGateway {
-  // Your handlers
-}
-```
-
-### Room Management
-
-Organize clients into rooms for targeted broadcasting:
-
-```typescript
-@WebSocketGateway()
-export class GameGateway {
-  @SubscribeMessage('join-game')
-  handleJoinGame(
-    @MessageBody() gameId: string,
-    @ConnectedSocket() client: any,
-  ) {
-    client.join(`game:${gameId}`);
-    
-    // Notify others in the room
-    client.to(`game:${gameId}`).emit('player-joined', {
-      playerId: client.id,
-    });
-    
-    return { event: 'joined', gameId };
-  }
-
-  @SubscribeMessage('game-action')
-  handleGameAction(
-    @MessageBody() payload: { gameId: string; action: any },
-    @ConnectedSocket() client: any,
-  ) {
-    // Broadcast to all clients in the game room
-    client.to(`game:${payload.gameId}`).emit('game-update', payload.action);
-  }
-
-  @SubscribeMessage('leave-game')
-  handleLeaveGame(
-    @MessageBody() gameId: string,
-    @ConnectedSocket() client: any,
-  ) {
-    client.leave(`game:${gameId}`);
-    client.to(`game:${gameId}`).emit('player-left', {
-      playerId: client.id,
-    });
-  }
-}
-```
-
-### Broadcasting
-
-Send messages to multiple clients efficiently:
-
-```typescript
-@WebSocketGateway()
-export class NotificationGateway {
-  @SubscribeMessage('notify-all')
-  notifyAll(@MessageBody() message: string, @ConnectedSocket() client: any) {
-    // Broadcast to all connected clients
-    client.broadcast.emit('notification', message);
-  }
-
-  @SubscribeMessage('notify-room')
-  notifyRoom(
-    @MessageBody() payload: { room: string; message: string },
-    @ConnectedSocket() client: any,
-  ) {
-    // Broadcast to specific room
-    client.to(payload.room).emit('notification', payload.message);
-  }
-
-  @SubscribeMessage('notify-rooms')
-  notifyMultipleRooms(
-    @MessageBody() payload: { rooms: string[]; message: string },
-    @ConnectedSocket() client: any,
-  ) {
-    // Broadcast to multiple rooms
-    client.to(payload.rooms).emit('notification', payload.message);
-  }
-}
-```
-
-## Client Connection
-
-Connect to your WebSocket server from the client:
-
-```typescript
-// Using native WebSocket
-const ws = new WebSocket('ws://localhost:8099');
-
-ws.onopen = () => {
-  ws.send(JSON.stringify({
-    event: 'message',
-    data: 'Hello server!',
-  }));
-};
-
-ws.onmessage = (event) => {
-  const response = JSON.parse(event.data);
-  console.log('Received:', response);
-};
-```
-
-```javascript
-// Using Socket.IO client (compatible)
-import { io } from 'socket.io-client';
-
-const socket = io('ws://localhost:8099');
-
-socket.on('connect', () => {
-  socket.emit('message', 'Hello server!');
-});
-
-socket.on('response', (data) => {
-  console.log('Received:', data);
-});
-```
-
-## Performance Tips
-
-1. **Use rooms for targeted broadcasting** instead of iterating through clients manually
-2. **Enable compression** for large messages to reduce bandwidth
-3. **Set appropriate `maxPayloadLength`** based on your message sizes
-4. **Use `idleTimeout`** to automatically disconnect inactive clients
-5. **Leverage backpressure handling** - the adapter automatically queues messages when clients are slow
-
-## API Reference
-
-### UwsAdapter
-
-The main adapter class that integrates uWebSockets.js with NestJS.
-
-#### Constructor
-
-```typescript
-constructor(app: INestApplicationContext, options?: UwsAdapterOptions)
-```
-
-#### Methods
-
-- `registerGateway(gateway: object): void` - Register a WebSocket gateway
-- `create(port: number, options?: any): any` - Create the WebSocket server
-- `bindClientConnect(server: any, callback: Function): void` - Bind connection handler
-- `bindClientDisconnect(client: any, callback: Function): void` - Bind disconnection handler
-- `bindMessageHandlers(client: any, handlers: MessageMappingProperties[], transform: (data: any) => Observable<any>): void` - Bind message handlers
-- `close(server: any): void` - Close the WebSocket server
-
-### Socket Methods
-
-Methods available on the `@ConnectedSocket()` parameter:
-
-- `send(data: string | Buffer): boolean` - Send data to the client
-- `emit(event: string, data: any): boolean` - Send an event with data
-- `join(room: string | string[]): void` - Join one or more rooms
-- `leave(room: string | string[]): void` - Leave one or more rooms
-- `to(room: string | string[]): BroadcastOperator` - Target specific rooms for broadcasting
-- `broadcast: BroadcastOperator` - Access broadcast operations
-- `close(): void` - Close the connection
-
-### BroadcastOperator
-
-Returned by `client.to()` and `client.broadcast` for broadcasting operations:
-
-- `emit(event: string, data: any): void` - Broadcast an event to targeted clients
-- `to(room: string | string[]): BroadcastOperator` - Add more rooms to target
-- `except(room: string | string[]): BroadcastOperator` - Exclude specific rooms
-
-## Migration Guide
-
-### From Socket.IO Adapter
-
-If you're migrating from the default Socket.IO adapter:
-
-1. Install uWestJS: `npm install uwestjs`
-2. Replace the adapter in `main.ts`:
-
-```typescript
-// Before
-import { IoAdapter } from '@nestjs/platform-socket.io';
-app.useWebSocketAdapter(new IoAdapter(app));
-
-// After
-import { UwsAdapter } from 'uwestjs';
-const adapter = new UwsAdapter(app, { port: 8099 });
-app.useWebSocketAdapter(adapter);
-```
-
-3. Register your gateways:
-
-```typescript
-const gateway = app.get(YourGateway);
-adapter.registerGateway(gateway);
-```
-
-4. Update client connections to use the new port (default: 8099)
-
-Your gateway code remains unchanged - all decorators work the same way.
-
-## Troubleshooting
-
-### Connection Issues
-
-If clients can't connect:
-
-- Verify the port is not blocked by a firewall
-- Check that the WebSocket path matches between client and server
-- Ensure CORS is configured correctly for your origin
-
-### Message Not Received
-
-If messages aren't being received:
-
-- Verify the event name matches between client and server
-- Check that the message format is valid JSON
-- Ensure the gateway is properly registered with `adapter.registerGateway()`
-
-### Performance Issues
-
-If you experience performance problems:
-
-- Increase `maxPayloadLength` if you're sending large messages
-- Enable compression for bandwidth-intensive applications
-- Use rooms for targeted broadcasting instead of iterating clients
-- Monitor backpressure - slow clients are automatically handled
+See [HTTP Middleware](./docs/http/Middleware.md) and [WebSocket Middleware](./docs/websocket/Middleware.md) for usage patterns.
+
+## Usage Guides
+
+### HTTP Usage
+- [Request Handling](./docs/http/Request.md) - Access headers, query params, body, cookies
+- [Response Methods](./docs/http/Response.md) - Send JSON, HTML, files, streams
+- [Routing](./docs/http/Routing.md) - Define routes with path parameters
+- [Body Parsing](./docs/http/Body-Parsing.md) - Parse JSON, form data, multipart
+- [File Uploads](./docs/http/Multipart.md) - Handle file uploads
+- [Static Files](./docs/http/Static-Files.md) - Serve static assets
+- [Middleware](./docs/http/Middleware.md) - Use Guards, Pipes, Filters, Interceptors
+- [Compression](./docs/http/Compression.md) - Enable compression
+- [CORS](./docs/http/CORS.md) - Configure cross-origin requests
+
+### WebSocket Usage
+- [Decorators](./docs/websocket/Decorators.md) - Use `@SubscribeMessage`, `@MessageBody`, `@ConnectedSocket`
+- [Rooms](./docs/websocket/Rooms.md) - Organize clients into rooms
+- [Broadcasting](./docs/websocket/Broadcasting.md) - Send messages to multiple clients
+- [Middleware](./docs/websocket/Middleware.md) - Use Guards, Pipes, Filters
+- [Lifecycle](./docs/websocket/Lifecycle.md) - Handle connection/disconnection events
+- [Exceptions](./docs/websocket/Exceptions.md) - Handle errors gracefully
+
+### API Reference
+- [UwsPlatformAdapter API](./docs/http/Server.md) - HTTP platform adapter methods
+- [UwsAdapter API](./docs/websocket/Adapter.md) - WebSocket adapter methods
+- [UwsSocket API](./docs/websocket/Socket.md) - Socket instance methods
+- [BroadcastOperator API](./docs/websocket/Broadcasting.md) - Broadcasting methods
+- [Request API](./docs/http/Request.md) - HTTP request methods
+- [Response API](./docs/http/Response.md) - HTTP response methods
+
+## Migration Guides
+
+### From Express
+
+Key differences when migrating from Express:
+
+1. Use `UwsPlatformAdapter` instead of Express adapter
+2. Initialize with `app.init()` then `adapter.listen()` instead of `app.listen()`
+3. Most Express APIs work the same (req, res, middleware)
+
+See [Server Documentation](./docs/http/Server.md) for detailed migration guide.
+
+### From Socket.IO
+
+Key differences when migrating from Socket.IO adapter:
+
+1. Use `UwsAdapter` instead of `IoAdapter`
+2. Register gateways with `adapter.registerGateway(gateway)`
+3. All NestJS decorators work the same way
+
+See [Adapter Documentation](./docs/websocket/Adapter.md) for detailed migration guide.
+
+## Performance
+
+uWestJS provides significant performance improvements:
+
+- **HTTP**: Up to 10x faster than Express
+- **WebSocket**: Up to 10x faster than Socket.IO
+- **Memory**: Lower memory footprint for concurrent connections
+- **Backpressure**: Automatic handling prevents memory issues
+- **Compression**: Built-in support reduces bandwidth usage
+
+For performance tips and benchmarks, see [Server Documentation](./docs/http/Server.md).
 
 ## Contributing
 
