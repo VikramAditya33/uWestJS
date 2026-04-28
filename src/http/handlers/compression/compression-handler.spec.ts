@@ -817,9 +817,10 @@ describe('CompressionHandler', () => {
       expect(setHeaderSpy).toHaveBeenCalledWith('content-encoding', 'gzip');
     });
 
-    it('should update Content-Length to compressed size', async () => {
+    it('should compress data without setting Content-Length', async () => {
       const handler = new CompressionHandler();
       setupMock('gzip', 'text/plain');
+      const removeHeaderSpy = jest.spyOn(mockRes, 'removeHeader');
 
       const result = await handler.compressBuffer(
         mockReq as UwsRequest,
@@ -827,8 +828,12 @@ describe('CompressionHandler', () => {
         LARGE_DATA
       );
 
-      // Verify Content-Length was set to compressed size
-      expect(setHeaderSpy).toHaveBeenCalledWith('content-length', result.length.toString());
+      // Verify content-length was NOT set (to avoid duplicates - send() handles it)
+      expect(setHeaderSpy).not.toHaveBeenCalledWith('content-length', expect.anything());
+      // Verify content-encoding and vary were set
+      expect(setHeaderSpy).toHaveBeenCalledWith('content-encoding', 'gzip');
+      expect(removeHeaderSpy).toHaveBeenCalledWith('content-length');
+      // Verify data was actually compressed
       expect(result.length).toBeLessThan(LARGE_DATA.length);
     });
 
