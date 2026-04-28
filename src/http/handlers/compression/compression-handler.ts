@@ -333,8 +333,8 @@ export class CompressionHandler {
 
       stream.on('end', () => {
         const compressed = Buffer.concat(chunks);
-        // Update Content-Length to match compressed size
-        res.setHeader('content-length', compressed.length.toString());
+        // Don't set content-length here - let send() handle it based on body size
+        // This avoids duplicate content-length headers
         resolve(compressed);
       });
 
