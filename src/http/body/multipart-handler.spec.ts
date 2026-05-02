@@ -122,6 +122,27 @@ describe('MultipartFormHandler', () => {
       expect(fields[1]).toMatchObject({ name: 'email', value: 'vikram@example.com' });
     });
 
+    it('should use request headers when options include headers', async () => {
+      const boundary = createBoundary();
+      const body = createMultipartBody(boundary, [{ name: 'name', value: 'Vikram Aditya' }]);
+
+      const req = setupMultipartRequest(boundary, body.length);
+      const handler = new MultipartFormHandler(req, {
+        headers: { 'content-type': 'something-wrong' } as any,
+      });
+
+      const fields: MultipartField[] = [];
+      const parsePromise = handler.parse(async (field) => {
+        fields.push(field);
+      });
+
+      sendMultipartData(body);
+      await parsePromise;
+
+      expect(fields).toHaveLength(1);
+      expect(fields[0]).toMatchObject({ name: 'name', value: 'Vikram Aditya' });
+    });
+
     it('should parse file fields', async () => {
       const boundary = createBoundary();
       const fileContent = 'Hello, World!';

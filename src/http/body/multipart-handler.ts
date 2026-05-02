@@ -136,8 +136,8 @@ export class MultipartFormHandler {
       let uploader: busboy.Busboy;
       try {
         uploader = busboy({
-          headers: this.request.headers,
           ...this.options,
+          headers: this.request.headers,
         });
       } catch (err) {
         reject(new Error(`Invalid multipart Content-Type: ${(err as Error).message}`));
